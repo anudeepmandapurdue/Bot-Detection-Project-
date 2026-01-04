@@ -209,4 +209,15 @@ router.get("/decision", (req, res) => {
   });
 });
 
+
+router.post("/event", (req, res) => {
+    const ip = ipQuery.length > 0 ? ipQuery : getClientIp(req);
+    const path = typeof req.body?.path === "string" ? req.body.path : req.originalUrl
+    const method = typeof req.body?.method === "string" ? req.body.method : req.method
+
+    const userAgent = 
+        typeof req.body?.userAgent === "string" ? req.body.userAgent : (req.get("user-agent") || "");
+
+    
+});
 module.exports = router;
