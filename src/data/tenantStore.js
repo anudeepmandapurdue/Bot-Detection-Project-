@@ -19,6 +19,11 @@ function getTenantByApiKey(apiKey){
 
 //demo add tenants
 
+function listTenants() {
+  return Array.from(tenantByApiKey.values());  // ✅ Correct
+}
+
+
 addTenant({
   id: "tenant_1",
   name: "Demo Shop",
@@ -35,5 +40,6 @@ addTenant({
 
 module.exports = {
   addTenant,
-  getTenantByApiKey
+  getTenantByApiKey, 
+  listTenants
 };
