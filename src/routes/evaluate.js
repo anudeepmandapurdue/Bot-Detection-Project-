@@ -12,8 +12,12 @@ function getClientIp(req) {
 }
 
 /**
- * POST /v1/event
- * Manual ingestion endpoint (useful for testing).
+ * POST /v1/evaluate
+ * Single-call “usable API” endpoint:
+ * - ingests request metadata
+ * - stores per-IP history
+ * - computes stats
+ * - returns decision
  */
 router.post("/", (req, res) => {
   const ip = getClientIp(req);
@@ -24,8 +28,15 @@ router.post("/", (req, res) => {
   const method =
     typeof req.body?.method === "string" ? req.body.method : req.method;
 
-  const userAgent = req.get("user-agent") || "";
-  const acceptLanguage = req.get("accept-language") || "";
+  const userAgent =
+    typeof req.body?.userAgent === "string"
+      ? req.body.userAgent
+      : req.get("user-agent") || "";
+
+  const acceptLanguage =
+    typeof req.body?.acceptLanguage === "string"
+      ? req.body.acceptLanguage
+      : req.get("accept-language") || "";
 
   const evt = {
     ip,
@@ -47,43 +58,6 @@ router.post("/", (req, res) => {
   if (events.length > MAX_EVENTS_PER_IP) {
     events.splice(0, events.length - MAX_EVENTS_PER_IP);
   }
-
-  res.status(200).json({
-    ok: true,
-    ip,
-    stored_for_ip: events.length
-  });
-});
-
-/**
- * GET /v1/event/stats
- */
-router.get("/stats", (req, res) => {
-  const ipQuery = typeof req.query.ip === "string" ? req.query.ip.trim() : "";
-  const ip = ipQuery.length > 0 ? ipQuery : getClientIp(req);
-
-  const ipEvents = req.app.locals.ipEvents;
-  const events = ipEvents.get(ip) || [];
-
-  const stats = computeStats(events);
-
-  res.status(200).json({
-    ok: true,
-    ip,
-    total_events_stored: events.length,
-    ...stats
-  });
-});
-
-/**
- * GET /v1/event/decision
- */
-router.get("/decision", (req, res) => {
-  const ipQuery = typeof req.query.ip === "string" ? req.query.ip.trim() : "";
-  const ip = ipQuery.length > 0 ? ipQuery : getClientIp(req);
-
-  const ipEvents = req.app.locals.ipEvents;
-  const events = ipEvents.get(ip) || [];
 
   const stats = computeStats(events);
   const decision = decideFromStats(stats);
