@@ -3,6 +3,7 @@ const express = require("express");
 const healthRouter = require("./routes/health");
 const eventRouter = require("./routes/event");
 const evaluateRouter = require("./routes/evaluate");
+const proxyRouter = require("./routes/proxy");
 
 
 function createApp(){
@@ -14,6 +15,7 @@ function createApp(){
     app.use("/health", healthRouter);
     app.use("/v1/event", eventRouter);
     app.use("/v1/evaluate", evaluateRouter);
+    app.use("/proxy", proxyRouter);
     app.use((req, res)=>{
         res.status(404).json({error: "Not Found"})
     });
