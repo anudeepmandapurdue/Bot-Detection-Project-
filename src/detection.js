@@ -1,4 +1,10 @@
+/**
+ * Filters events based on a sliding time window.
+ */
 function filterEventsByWindow(events, windowMs) {
+  // Fix: Ensure events is an array to prevent crashes on first-time hits
+  if (!Array.isArray(events)) return []; 
+  
   const now = Date.now();
   const cutoff = now - windowMs;
 
@@ -10,6 +16,9 @@ function filterEventsByWindow(events, windowMs) {
   return recentEvents;
 }
 
+/**
+ * Derives behavioral metrics (RPM, Bursts, Path Diversity).
+ */
 function computeStats(events) {
   const events10s = filterEventsByWindow(events, 10_000);
   const events60s = filterEventsByWindow(events, 60_000);
@@ -27,6 +36,9 @@ function computeStats(events) {
   };
 }
 
+/**
+ * Scoring logic to decide ALLOW / CHALLENGE / BLOCK.
+ */
 function decideFromStats(stats) {
   const reasons = [];
   let score = 0;

@@ -1,89 +1,38 @@
 const express = require("express");
 const router = express.Router();
-
 const { computeStats, decideFromStats } = require("../detection");
+const { recordEvent, getEvents } = require("../data/eventStore");
 
 function getClientIp(req) {
   const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.length > 0) {
-    return xff.split(",")[0].trim();
-  }
-  return req.ip;
+  return (typeof xff === "string" && xff.length > 0) ? xff.split(",")[0].trim() : req.ip;
 }
 
-/**
- * POST /v1/event
- * Manual ingestion endpoint (useful for testing).
- */
 router.post("/", (req, res) => {
   const ip = getClientIp(req);
-
-  const path =
-    typeof req.body?.path === "string" ? req.body.path : req.originalUrl;
-
-  const method =
-    typeof req.body?.method === "string" ? req.body.method : req.method;
-
-  const userAgent = req.get("user-agent") || "";
-  const acceptLanguage = req.get("accept-language") || "";
+  const tenantId = req.tenant.id;
 
   const evt = {
     ip,
-    path,
-    method,
-    userAgent,
-    acceptLanguage,
+    path: req.body?.path || req.originalUrl,
+    method: req.body?.method || req.method,
     timestamp: Date.now()
   };
 
-  const ipEvents = req.app.locals.ipEvents;
-  const MAX_EVENTS_PER_IP = req.app.locals.MAX_EVENTS_PER_IP;
-
-  if (!ipEvents.has(ip)) ipEvents.set(ip, []);
-  const events = ipEvents.get(ip);
-
-  events.push(evt);
-
-  if (events.length > MAX_EVENTS_PER_IP) {
-    events.splice(0, events.length - MAX_EVENTS_PER_IP);
-  }
+  recordEvent(tenantId, ip, evt);
+  const events = getEvents(tenantId, ip);
 
   res.status(200).json({
     ok: true,
     ip,
+    tenant: tenantId,
     stored_for_ip: events.length
   });
 });
 
-/**
- * GET /v1/event/stats
- */
-router.get("/stats", (req, res) => {
-  const ipQuery = typeof req.query.ip === "string" ? req.query.ip.trim() : "";
-  const ip = ipQuery.length > 0 ? ipQuery : getClientIp(req);
-
-  const ipEvents = req.app.locals.ipEvents;
-  const events = ipEvents.get(ip) || [];
-
-  const stats = computeStats(events);
-
-  res.status(200).json({
-    ok: true,
-    ip,
-    total_events_stored: events.length,
-    ...stats
-  });
-});
-
-/**
- * GET /v1/event/decision
- */
 router.get("/decision", (req, res) => {
-  const ipQuery = typeof req.query.ip === "string" ? req.query.ip.trim() : "";
-  const ip = ipQuery.length > 0 ? ipQuery : getClientIp(req);
-
-  const ipEvents = req.app.locals.ipEvents;
-  const events = ipEvents.get(ip) || [];
+  const ip = req.query.ip || getClientIp(req);
+  const events = getEvents(req.tenant.id, ip);
 
   const stats = computeStats(events);
   const decision = decideFromStats(stats);
@@ -91,6 +40,7 @@ router.get("/decision", (req, res) => {
   res.status(200).json({
     ok: true,
     ip,
+    tenant: req.tenant.id,
     ...decision,
     stats
   });
