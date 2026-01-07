@@ -2,6 +2,7 @@ const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { computeStats, decideFromStats } = require("../detection");
 const { recordEvent, getEvents } = require("../data/eventStore");
+const { updateGlobalReputation, getGlobalScore } = require("../data/reputationStore");
 
 const router = express.Router();
 
@@ -19,21 +20,26 @@ router.use(async (req, res, next) => {
         // 1. Log the event (awaiting DB)
         await recordEvent(tenant.id, ip, { 
             path: req.originalUrl, // Full path for better detection
-            method: req.method 
+            method: req.method,
+            timestamp: Date.now()
         });
-
-        // 2. Get history (awaiting DB)
-        const events = await getEvents(tenant.id, ip);
+        //Fetch local and global data
+        const localEvents = await getEvents(tenant.id, ip);
+        const globalScore = await getGlobalScore(ip);
 
         // 3. Logic (Synchronous)
-        // Ensure events is an array to prevent computeStats from crashing
-        const stats = computeStats(events || []);
+        // Ensure local events is an array to prevent computeStats from crashing
+        const stats = computeStats(localEvents);
         const decision = decideFromStats(stats);
 
-        if (decision.decision === "BLOCK") {
+        if (decision.decision === "BLOCK" || globalScore > 50) {
+            if(decision.decision === "BLOCK"){
+                await updateGlobalReputation(ip, 15);
+            }
             return res.status(403).json({ 
                 error: "Access Denied", 
-                reason: "Bot behavior detected", 
+                reason: decision.decision == "BLOCK" ? "Local Bot Behavior" : "Global malicious reputation",
+                globalScore,
                 stats 
             });
         }
