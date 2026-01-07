@@ -3,26 +3,20 @@ const { addTenant } = require("../data/tenantStore");
 const { listTenants} = require("../data/tenantStore");
 const router = express.Router();
 
-router.post("/", (req, res) =>{
-    const { id, name, apiKey, origin} = req.body;
-    if (!id || !name || !apiKey || !origin) {
-    return res.status(400).json({
-      error: "Missing required tenant fields"
-    });
-  }
-
-  addTenant({id, name, apiKey, origin});
-
-  res.status(201).json({
-    ok: true,
-    tenant: {id, name, origin}
-  });
-});
-
-router.get("/", (req, res) => {
-  res.json({
-    tenants: listTenants()
-  });
+router.post("/", async (req, res) => {
+    try {
+        await addTenant(req.body);
+        res.status(201).json({ ok: true });
+    } catch (err) {
+        // Check if the error is a "Unique Violation" (Postgres code 23505)
+        if (err.code === '23505') {
+            return res.status(409).json({ 
+                error: "Tenant ID or API Key already exists" 
+            });
+        }
+        console.error(err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 });
 
 

@@ -1,44 +1,29 @@
-const tenantEvents = new Map();
-const MAX_EVENTS_PER_IP = 200;
+const db = require('../db');
 
-function getIpMapForTenant(tenantId) {
-  if (!tenantEvents.has(tenantId)) {
-    tenantEvents.set(tenantId, new Map());
-  }
-  return tenantEvents.get(tenantId);
+async function recordEvent(tenantId, ip, event) {
+  const query = `
+    INSERT INTO events (tenant_id, ip, path, method, timestamp) 
+    VALUES ($1, $2, $3, $4, $5)
+  `;
+  await db.query(query, [
+    tenantId, 
+    ip, 
+    event.path, 
+    event.method, 
+    Date.now()
+  ]);
 }
 
-function recordEvent(tenantId, ip, event) {
-  const ipMap = getIpMapForTenant(tenantId);
-
-  if (!ipMap.has(ip)) {
-    ipMap.set(ip, []);
-  }
-
-  const events = ipMap.get(ip);
-  
-  const eventWithTime = {
-    ...event,
-    timestamp: event.timestamp || Date.now()
-  };
-
-  events.push(eventWithTime);
-
-  if (events.length > MAX_EVENTS_PER_IP) {
-    events.splice(0, events.length - MAX_EVENTS_PER_IP);
-  }
-
-  return events;
+async function getEvents(tenantId, ip) {
+  const query = `
+    SELECT path, method, timestamp 
+    FROM events 
+    WHERE tenant_id = $1 AND ip = $2 
+    ORDER BY timestamp DESC 
+    LIMIT 200
+  `;
+  const result = await db.query(query, [tenantId, ip]);
+  return result.rows;
 }
 
-function getEvents(tenantId, ip) {
-  const ipMap = tenantEvents.get(tenantId);
-  if (!ipMap) return [];
-  
-  return ipMap.get(ip) || [];
-}
-
-module.exports = {
-  recordEvent,
-  getEvents
-};
+module.exports = { recordEvent, getEvents };

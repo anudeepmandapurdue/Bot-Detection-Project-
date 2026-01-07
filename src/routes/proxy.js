@@ -5,53 +5,62 @@ const { recordEvent, getEvents } = require("../data/eventStore");
 
 const router = express.Router();
 
-function getClientIp(req) {
-  const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string") {
-    return xff.split(",")[0].trim();
-  }
-  return req.socket.remoteAddress || req.ip || "unknown";
-}
+router.use(async (req, res, next) => {
+    // SAFETY CHECK: Make sure authenticate.js actually found a tenant
+    const tenant = req.tenant;
+    if (!tenant || !tenant.id) {
+        console.error("Proxy Error: No tenant found on request object");
+        return res.status(401).json({ error: "Unauthorized: Tenant context missing" });
+    }
 
-router.use((req, res, next) => {
-  const tenant = req.tenant; // Provided by authenticateTenant
-  const ip = getClientIp(req);
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
-  const evt = {
-    ip,
-    path: req.originalUrl,
-    method: req.method,
-    userAgent: req.get("user-agent") || "",
-    timestamp: Date.now()
-  };
+    try { 
+        // 1. Log the event (awaiting DB)
+        await recordEvent(tenant.id, ip, { 
+            path: req.originalUrl, // Full path for better detection
+            method: req.method 
+        });
 
-  // Record and get events scoped specifically to this tenant
-  recordEvent(tenant.id, ip, evt); 
-  const events = getEvents(tenant.id, ip);
-  
-  const stats = computeStats(events);
-  const decision = decideFromStats(stats);
+        // 2. Get history (awaiting DB)
+        const events = await getEvents(tenant.id, ip);
 
-  if (decision.decision === "ALLOW") {
-    return next();
-  }
+        // 3. Logic (Synchronous)
+        // Ensure events is an array to prevent computeStats from crashing
+        const stats = computeStats(events || []);
+        const decision = decideFromStats(stats);
 
-  return res.status(decision.decision === "CHALLENGE" ? 401 : 403).json({
-    ok: false,
-    action: decision.decision,
-    tenant: tenant.id,
-    ip,
-    stats
-  });
+        if (decision.decision === "BLOCK") {
+            return res.status(403).json({ 
+                error: "Access Denied", 
+                reason: "Bot behavior detected", 
+                stats 
+            });
+        }
+
+        next();
+    } catch (err) {
+        // This is where your "Internal Server Error" was being caught
+        console.error("Proxy Detection Error details:", err.message);
+        next(); // Fallback: allow traffic if detection engine fails
+    }
 });
 
-// Dynamic Proxy Forwarding to the tenant's unique origin
+// Dynamic Proxy Forwarding
 router.use("/", (req, res, next) => {
-  createProxyMiddleware({
-    target: req.tenant.origin, 
-    changeOrigin: true,
-    xfwd: true
-  })(req, res, next);
+    if (!req.tenant || !req.tenant.origin) {
+        return res.status(500).json({ error: "Proxy target origin missing" });
+    }
+
+    createProxyMiddleware({
+        target: req.tenant.origin, 
+        changeOrigin: true,
+        // Optional: add error handling for the proxy itself
+        onError: (err, req, res) => {
+            console.error("Proxy Forwarding Error:", err);
+            res.status(502).json({ error: "Bad Gateway: Origin unreachable" });
+        }
+    })(req, res, next);
 });
 
 module.exports = router;
