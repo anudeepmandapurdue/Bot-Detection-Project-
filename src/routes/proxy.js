@@ -2,56 +2,86 @@ const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { computeStats, decideFromStats } = require("../detection");
 const { recordEvent, getEvents } = require("../data/eventStore");
+const { updateGlobalReputation, getGlobalScore } = require("../data/reputationStore");
+const redis = require("../db/redis");
 
 const router = express.Router();
+router.use(async (req, res, next) => {
+    const tenant = req.tenant;
+    if (!tenant || !tenant.id) {
+        return res.status(401).json({ error: "Unauthorized: Tenant context missing" });
+    }
 
-function getClientIp(req) {
-  const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string") {
-    return xff.split(",")[0].trim();
-  }
-  return req.socket.remoteAddress || req.ip || "unknown";
-}
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
-router.use((req, res, next) => {
-  const tenant = req.tenant; // Provided by authenticateTenant
-  const ip = getClientIp(req);
+    // 1. CAPTURE EVERYTHING ONCE
+    const fingerprint = {
+        path: req.originalUrl,
+        method: req.method,
+        userAgent: req.headers['user-agent'], 
+        referer: req.headers['referer'],
+        acceptLanguage: req.headers['accept-language'],
+        os: req.headers['sec-ch-ua-platform']
+    };
 
-  const evt = {
-    ip,
-    path: req.originalUrl,
-    method: req.method,
-    userAgent: req.get("user-agent") || "",
-    timestamp: Date.now()
-  };
+    console.log(`[DEBUG] Recording event for IP ${ip} - OS: ${fingerprint.os}`);
 
-  // Record and get events scoped specifically to this tenant
-  recordEvent(tenant.id, ip, evt); 
-  const events = getEvents(tenant.id, ip);
-  
-  const stats = computeStats(events);
-  const decision = decideFromStats(stats);
+    try { 
+        // 2. CHECK CACHE FIRST
+        const cachedBlock = await redis.get(`block:${ip}`);
+        if (cachedBlock){
+            return res.status(403).json({
+                error: "Access Denied",
+                reason: "Cached security lockout",
+                source: "Redis-Cache"
+            });
+        }
 
-  if (decision.decision === "ALLOW") {
-    return next();
-  }
+        // 3. RECORD THE RICH FINGERPRINT (Only call this once!)
+        await recordEvent(tenant.id, ip, fingerprint);
 
-  return res.status(decision.decision === "CHALLENGE" ? 401 : 403).json({
-    ok: false,
-    action: decision.decision,
-    tenant: tenant.id,
-    ip,
-    stats
-  });
+        // 4. FETCH DATA FOR DETECTION
+        const localEvents = await getEvents(tenant.id, ip);
+        const globalScore = await getGlobalScore(ip);
+
+        const stats = computeStats(localEvents);
+        const decision = decideFromStats(stats);
+
+        // 5. DECISION ENGINE
+        if (decision.decision === "BLOCK" || globalScore > 50) {
+            if(decision.decision === "BLOCK"){
+                await updateGlobalReputation(ip, 15);
+            }
+            await redis.setEx(`block:${ip}`, 600, "true");
+            return res.status(403).json({ 
+                error: "Access Denied", 
+                reason: decision.decision == "BLOCK" ? "Local Bot Behavior" : "Global malicious reputation",
+                globalScore,
+                stats 
+            });
+        }
+
+        next();
+    } catch (err) {
+        console.error("Proxy Detection Error details:", err.message);
+        next(); 
+    }
 });
-
-// Dynamic Proxy Forwarding to the tenant's unique origin
+// Dynamic Proxy Forwarding
 router.use("/", (req, res, next) => {
-  createProxyMiddleware({
-    target: req.tenant.origin, 
-    changeOrigin: true,
-    xfwd: true
-  })(req, res, next);
+    if (!req.tenant || !req.tenant.origin) {
+        return res.status(500).json({ error: "Proxy target origin missing" });
+    }
+
+    createProxyMiddleware({
+        target: req.tenant.origin, 
+        changeOrigin: true,
+        // Optional: add error handling for the proxy itself
+        onError: (err, req, res) => {
+            console.error("Proxy Forwarding Error:", err);
+            res.status(502).json({ error: "Bad Gateway: Origin unreachable" });
+        }
+    })(req, res, next);
 });
 
 module.exports = router;

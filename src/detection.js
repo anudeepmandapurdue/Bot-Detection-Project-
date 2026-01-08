@@ -2,18 +2,16 @@
  * Filters events based on a sliding time window.
  */
 function filterEventsByWindow(events, windowMs) {
-  // Fix: Ensure events is an array to prevent crashes on first-time hits
-  if (!Array.isArray(events)) return []; 
+  if (!Array.isArray(events)) return [];
   
   const now = Date.now();
   const cutoff = now - windowMs;
 
-  const recentEvents = [];
-  for (const evt of events) {
-    if (typeof evt.timestamp !== "number") continue;
-    if (evt.timestamp >= cutoff) recentEvents.push(evt);
-  }
-  return recentEvents;
+  return events.filter(evt => {
+    // Keep this fix: ensures the DB string timestamp becomes a JS number
+    const ts = Number(evt.timestamp);
+    return !isNaN(ts) && ts >= cutoff;
+  });
 }
 
 /**
@@ -43,6 +41,7 @@ function decideFromStats(stats) {
   const reasons = [];
   let score = 0;
 
+  // 1. RPM Logic
   if (stats.rpm >= 120) {
     reasons.push("very_high_rpm");
     score += 80;
@@ -51,6 +50,7 @@ function decideFromStats(stats) {
     score += 40;
   }
 
+  // 2. Burst Logic
   if (stats.count_10s >= 30) {
     reasons.push("burst_10s");
     score += 40;
@@ -59,6 +59,7 @@ function decideFromStats(stats) {
     score += 20;
   }
 
+  // 3. Path Diversity Logic (Scraping detection)
   if (stats.unique_paths_60s >= 40) {
     reasons.push("very_many_unique_paths");
     score += 40;
@@ -67,6 +68,7 @@ function decideFromStats(stats) {
     score += 20;
   }
 
+  // Final Decision Mapping
   let decision = "ALLOW";
   if (score >= 80) decision = "BLOCK";
   else if (score >= 30) decision = "CHALLENGE";

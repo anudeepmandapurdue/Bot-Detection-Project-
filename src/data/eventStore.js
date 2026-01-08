@@ -1,44 +1,44 @@
-const tenantEvents = new Map();
-const MAX_EVENTS_PER_IP = 200;
+const db = require('../db');
 
-function getIpMapForTenant(tenantId) {
-  if (!tenantEvents.has(tenantId)) {
-    tenantEvents.set(tenantId, new Map());
-  }
-  return tenantEvents.get(tenantId);
-}
-
-function recordEvent(tenantId, ip, event) {
-  const ipMap = getIpMapForTenant(tenantId);
-
-  if (!ipMap.has(ip)) {
-    ipMap.set(ip, []);
-  }
-
-  const events = ipMap.get(ip);
+async function recordEvent(tenantId, ip, fingerprint) {
+  // Destructure for clarity
+  const { path, method, userAgent, referer, acceptLanguage, os } = fingerprint;
   
-  const eventWithTime = {
-    ...event,
-    timestamp: event.timestamp || Date.now()
-  };
-
-  events.push(eventWithTime);
-
-  if (events.length > MAX_EVENTS_PER_IP) {
-    events.splice(0, events.length - MAX_EVENTS_PER_IP);
-  }
-
-  return events;
-}
-
-function getEvents(tenantId, ip) {
-  const ipMap = tenantEvents.get(tenantId);
-  if (!ipMap) return [];
+  const query = `
+    INSERT INTO events (
+        tenant_id, ip, path, method, timestamp, 
+        user_agent, referer, accept_language, operating_system
+    ) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  `;
   
-  return ipMap.get(ip) || [];
+  try {
+    await db.query(query, [
+      tenantId, 
+      ip, 
+      path, 
+      method, 
+      Date.now(),
+      userAgent || 'unknown',
+      referer || 'direct',
+      acceptLanguage || 'unknown',
+      os || 'unknown'
+    ]);
+  } catch (err) {
+    console.error("Database Insert Error:", err.message);
+  }
 }
 
-module.exports = {
-  recordEvent,
-  getEvents
-};
+async function getEvents(tenantId, ip) {
+  const query = `
+    SELECT path, method, user_agent, referer, timestamp, accept_language, operating_system
+    FROM events 
+    WHERE tenant_id = $1 AND ip = $2 
+    ORDER BY timestamp DESC 
+    LIMIT 200
+  `;
+  const result = await db.query(query, [tenantId, ip]);
+  return result.rows;
+}
+
+module.exports = { recordEvent, getEvents };

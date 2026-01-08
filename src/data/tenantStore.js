@@ -1,42 +1,30 @@
-const tenantByApiKey = new Map();//easy lookup
+const db = require('../db');
 
+//recieves tenant by their api key from postgres
+async function getTenantByApiKey(apiKey){
 
-function addTenant(tenant){
-    if(!tenant || typeof tenant.apiKey !== "string"){
-        throw new Error("Invalid Tenant");
-    }
-
-    tenantByApiKey.set(tenant.apiKey, tenant);
+    const query = 'SELECT id, name, origin FROM tenants WHERE api_key = $1';
+    const result = await db.query(query, [apiKey])
+    return result.rows[0] || null;
 }   
 
-function getTenantByApiKey(apiKey){
-    if(!apiKey){
-        return null;
-    }
-    return tenantByApiKey.get(apiKey) || null; 
+async function addTenant({id, name, apiKey, origin}){
+    const query = `
+      INSERT INTO tenants (id, name, api_key, origin)
+      VALUES ($1, $2, $3, $4)
+    `;
+    await db.query(query, [id, name, apiKey, origin]);
 }
 
 
 //demo add tenants
 
-function listTenants() {
-  return Array.from(tenantByApiKey.values());  // ✅ Correct
+async function listTenants() {
+    const result = await db.query('SELECT id, name, origin FROM tenants');
+    return result.rows;
+
 }
 
-
-addTenant({
-  id: "tenant_1",
-  name: "Demo Shop",
-  apiKey: "sk_test_shop",
-  origin: "http://localhost:4000"
-});
-
-addTenant({
-  id: "tenant_2",
-  name: "Demo API",
-  apiKey: "sk_test_api",
-  origin: "http://localhost:5000"
-});
 
 module.exports = {
   addTenant,

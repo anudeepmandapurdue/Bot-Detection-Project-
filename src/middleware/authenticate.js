@@ -1,25 +1,27 @@
 const { getTenantByApiKey } = require("../data/tenantStore");
 
-// Fix the spelling here to "authenticateTenant"
-const authenticateTenant = (req, res, next) => {
-    const apiKey = req.headers["x-api-key"];
-    if (!apiKey) {
-        return res.status(401).json({ 
-            error: "Missing API Key", 
-            message: "Please provide your key in the 'x-api-key' header." 
-        });
+// We add 'async' so we can use 'await' inside
+const authenticateTenant = async (req, res, next) => {
+  const apiKey = req.headers["x-api-key"];
+  
+  if (!apiKey) {
+    return res.status(401).json({ error: "Missing API Key" });
+  }
+
+  try {
+    // We 'await' the database response
+    const tenant = await getTenantByApiKey(apiKey);
+
+    if (!tenant) {
+      return res.status(401).json({ error: "Invalid API Key" });
     }
 
-    const tenant = getTenantByApiKey(apiKey);
-    if (!tenant) {
-        return res.status(401).json({
-            error: "Invalid API key",
-            message: "The provided api key does not match with a registered tenant"
-        });
-    }
-    req.tenant = tenant; 
+    req.tenant = tenant;
     next();
+  } catch (err) {
+    console.error("Database Auth Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 };
 
-// Ensure this export name matches what you use in app.js
 module.exports = { authenticateTenant };
