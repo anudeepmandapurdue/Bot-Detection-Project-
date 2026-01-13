@@ -1,5 +1,11 @@
-node_modules
-.env
+node_modules/
+.vscode/
+data/
+*.log
+.vscode/
+data/final_numerical_dataset.csv
+data/talkingdata-adtracking-fraud-detection/
+data/web_bot_detection_dataset/
+*.log
+__pycache__/
 .DS_Store
-coverage 
-npm-debug.log*a
