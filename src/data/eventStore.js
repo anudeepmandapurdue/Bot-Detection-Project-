@@ -14,7 +14,7 @@ async function recordEvent(tenantId, ip, fingerprint) {
   
   try {
     await db.query(query, [
-      tenantId, 
+      tenantId, //not needed 
       ip, 
       path, 
       method, 
