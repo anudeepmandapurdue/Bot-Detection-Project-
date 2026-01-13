@@ -2,6 +2,9 @@
 
 # TODO LIST:
 -ML 
+  50/50 training split between bots and humans
+  90/10 split
+  75/25 split
 -Auto-Decay
 -Dashboard
 -UI
