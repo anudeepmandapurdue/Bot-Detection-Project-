@@ -1,27 +1,11 @@
-# Dependencies
 node_modules/
-npm-debug.log*
-
-# Environment
-.env
-.env.local
-
-# Data files - too large for GitHub
+.vscode/
+data/
+*.log
+.vscode/
+data/final_numerical_dataset.csv
 data/talkingdata-adtracking-fraud-detection/
 data/web_bot_detection_dataset/
-*.csv
-*.joblib
-*.pkl
-
-# Models and artifacts
-*.joblib
-*.pkl
-
-# VS Code
-.vscode/
-*.code-workspace
-
-# OS
+*.log
+__pycache__/
 .DS_Store
-Thumbs.db
-coverage/
