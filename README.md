@@ -1,13 +1,11 @@
 # Bot Detection Proxy (Cloudflare‑Inspired)
 
 # TODO LIST:
--ML 
-  50/50 training split between bots and humans
-  90/10 split
-  75/25 split
--Auto-Decay
--Dashboard
--UI
+-Finished ML portion
+-Tie everything up #3
+-Auto-Decay #4
+-Dashboard #2
+-UI #1
 ## Overview
 
 This project is a **Cloudflare‑inspired bot detection system** built with **Node.js and Express**. It behaves like a **lightweight Web Application Firewall (WAF)** sitting in front of an origin server.
