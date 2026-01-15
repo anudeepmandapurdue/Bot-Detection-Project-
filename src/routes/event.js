@@ -8,7 +8,7 @@ function getClientIp(req) {
   return (typeof xff === "string" && xff.length > 0) ? xff.split(",")[0].trim() : req.ip;
 }
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const ip = getClientIp(req);
   const tenantId = req.tenant.id;
 
@@ -19,8 +19,8 @@ router.post("/", (req, res) => {
     timestamp: Date.now()
   };
 
-  recordEvent(tenantId, ip, evt);
-  const events = getEvents(tenantId, ip);
+  await recordEvent(tenantId, ip, evt);
+  const events = await getEvents(tenantId, ip);
 
   res.status(200).json({
     ok: true,
@@ -30,9 +30,11 @@ router.post("/", (req, res) => {
   });
 });
 
-router.get("/decision", (req, res) => {
+router.get("/decision", async (req, res) => {
   const ip = req.query.ip || getClientIp(req);
-  const events = getEvents(req.tenant.id, ip);
+  
+  // ✅ FIX: Added 'await' so we get the actual array of events
+  const events = await getEvents(req.tenant.id, ip);
 
   const stats = computeStats(events);
   const decision = decideFromStats(stats);

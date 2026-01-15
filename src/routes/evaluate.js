@@ -8,7 +8,7 @@ function getClientIp(req) {
   return (typeof xff === "string" && xff.length > 0) ? xff.split(",")[0].trim() : req.ip;
 }
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const ip = getClientIp(req);
   const tenantId = req.tenant.id; // Scoped by middleware
 
@@ -20,8 +20,8 @@ router.post("/", (req, res) => {
     timestamp: Date.now()
   };
 
-  recordEvent(tenantId, ip, evt);
-  const events = getEvents(tenantId, ip);
+  await recordEvent(tenantId, ip, evt);
+  const events = await getEvents(tenantId, ip);
 
   const stats = computeStats(events);
   const decision = decideFromStats(stats);
