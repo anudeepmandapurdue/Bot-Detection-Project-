@@ -313,34 +313,3 @@ You didn’t build a toy API.
 You built a **security edge system**.
 
 That’s exactly what top‑tier backend and infra teams look for.
-
-
-🚀 The Evolution: Static Rules → Behavioral MLWe have transitioned from simple "if/else" rate limiting to a Predictive Inference Pipeline.The Problem: Sophisticated bots mimic humans by browsing "low and slow" to stay under traditional rate limits.The Solution: A Random Forest / Logistic Regression classifier that looks for "robotic" patterns in timing, path diversity, and header fingerprints.🏗️ High-Level ArchitecturePlaintextClient Request → [ Sentinel Proxy (Node.js) ]
-                        ↓
-             [ 1. Ingestion ] → Save to Access Logs / Redis
-                        ↓
-             [ 2. Feature Extraction ] → 31 Behavioral Data Points
-                        ↓
-             [ 3. Inference ] → Python ML Service / ONNX Bridge
-                        ↓
-             [ 4. Enforcement ] → ALLOW / CHALLENGE / BLOCK
-📁 Updated Directory StructurePlaintextbot-detection-api/
-├── data/                  # NEW: ML Training & Testing Data
-│   ├── humans/            # Known human access logs
-│   ├── bots/              # Known bot access logs
-│   └── master_dataset.csv # Final labeled dataset for training
-├── notebooks/             # NEW: Research & Development
-│   └── analysis.ipynb     # Feature extraction & model assessment
-├── src/
-│   ├── classifier.js      # NEW: ML Model Bridge (Node-to-Python)
-│   ├── featureMapper.js   # NEW: Real-time feature calculation
-│   ├── detection.js       # Hybrid Decision Engine (Rules + ML)
-│   └── proxy.js           # Enforcement proxy
-└── origin-server.js       # Simulated backend
-🧠 ML Feature Engineering GuideOur classifier doesn't just look at IP addresses; it analyzes 31 distinct signals categorized into behavioral groups:A. Timing & Cadence (Key for "Low & Slow" detection)Request Interval Variance: Humans are erratic; bots are perfectly rhythmic. Low variance = Bot.Burst Count: Number of requests sent in a single 1-second cluster.Min Request Interval: Detects sub-second automated clicking.B. Navigation EntropyRepeating Path Ratio: % of requests to the same URL. Bots often scrape one endpoint repeatedly.Path Depth Avg: Humans stay shallow; crawlers go deep into directory structures.Admin Recon: Binary check for attempts on /admin, /wp-admin, or /api/v1/config.C. Browser FingerprintingUA Headless Check: Detects "HeadlessChrome" or "Puppeteer" signatures.UA Length: Short or generic User-Agent strings are high-risk indicators.OS/Method Encoding: Mismatches between OS types and expected browsing behavior.🚦 How to Test the ML Pipeline1. Training (The Notebook)Open notebooks/analysis.ipynb to:Load the 186-row labeled dataset.Run Feature Extraction across the 31 available metrics.Train the RandomForest model and evaluate Accuracy, Precision, and Recall.Save the trained model as bot_model.joblib.2. Real-Time DetectionOnce the model is loaded into the proxy:Bash# Test robotic behavior (ML Trigger)
-# This waits 1.5s between requests to stay under rate limits
-for i in {1..10}; do 
-  curl -H "x-api-key: your_key" http://localhost:3000/proxy/item-$i
-  sleep 1.5
-done
-Observation: Even though you are below the RPM limit, the ML Logic will detect the perfectly consistent timing and linear path traversal, resulting in a 403 Forbidden.📈 Model Performance GoalsDataset SizeExpected AccuracyDetection TypeCurrent (186 rows)65-85%Clear signals (Headless/High RPM)Target (1000+ rows)90-98%Subtle "Low & Slow" behavioral shifts
